@@ -2,6 +2,7 @@
  * Created by hoho on 2018. 7. 23..
  */
 import _ from "utils/underscore";
+import dom from 'utils/polyfills/dom.js';
 
 /**
  * @brief   It was replace jquery's selector. It Often used by OvenTemplate. (/view/engine/OvenTemplate.js)
@@ -207,7 +208,26 @@ const La$ = function(selectorOrElement){
     };
 
     that.closest = (selectorString) => {
+
+        $element.closest = function (s) {
+
+            let el = $element;
+
+            do {
+
+                if (el.matches(s)) {
+                    return el;
+                }
+
+                el = el.parentElement || el.parentNode;
+
+            } while (el !== null && el.nodeType === 1);
+
+            return null;
+        };
+
         let closestElement = $element.closest(selectorString);
+
         if(closestElement){
             return La$(closestElement);
         }else{

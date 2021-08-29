@@ -11,7 +11,6 @@ import {
     AD_TIME
 } from "api/constants";
 import {STATE_COMPLETE} from "../../../api/constants";
-//import ResizeSensor from "resize-sensor";
 
 const ProgressBar = function($container, api, isAd){
     const $root = LA$("#"+api.getContainerId());
@@ -217,12 +216,6 @@ const ProgressBar = function($container, api, isAd){
         $time = $current.find(".op-progressbar-time");
         $preview = $current.find(".op-progressbar-preview");
 
-        /*new ResizeSensor($progressBar.get(), function() {
-            console.log('Changed  $progressBar' );
-            positionElements(currentPlayingPercentage);
-            drawLoadProgress(currentLoadedPercentage);
-        });*/
-
         if(isAd){
             api.on(AD_TIME, function(data) {
                 if(data && data.duration && data.position){
@@ -353,10 +346,6 @@ const ProgressBar = function($container, api, isAd){
                 drawHoverProgress(percentage);
                 drawTimeIndicator(percentage, event);
             }
-        },
-        "mousemove document" : function(event, $current, template){
-
-            event.preventDefault();
 
             if (mouseDown && !isMobile) {
                 const percentage = calculatePercentage(event);
@@ -370,7 +359,7 @@ const ProgressBar = function($container, api, isAd){
                 drawTimeIndicator(percentage, event);
             }
         },
-        "mouseup document" : function(event, $current, template){
+        "mouseup .op-progressbar" : function(event, $current, template){
 
             event.preventDefault();
 
