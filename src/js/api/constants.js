@@ -35,6 +35,8 @@ export const PLAYLIST_CHANGED = "playlistChanged";
 export const CONTENT_SEEKED = "seeked";
 export const ALL_PLAYLIST_ENDED = "allPlaylistEnded";
 export const NETWORK_UNSTABLED = "unstableNetwork";
+export const HLS_PREPARED = "hlsPrepared";
+export const HLS_DESTROYED = "hlsDestroyed";
 export const DASH_PREPARED = "dashPrepared";
 export const DASH_DESTROYED = "dashDestroyed";
 
@@ -98,8 +100,10 @@ export const PLAYER_WEBRTC_ADD_ICECANDIDATE_ERROR = 502;
 export const PLAYER_WEBRTC_SET_REMOTE_DESC_ERROR = 503;
 export const PLAYER_WEBRTC_CREATE_ANSWER_ERROR = 504;
 export const PLAYER_WEBRTC_SET_LOCAL_DESC_ERROR = 505;
+export const PLAYER_WEBRTC_INTERNAL_ERROR = 506;
 export const PLAYER_WEBRTC_NETWORK_SLOW = 510;
 export const PLAYER_WEBRTC_UNEXPECTED_DISCONNECT = 511;
+export const PLAYER_WEBRTC_TIMEOUT = 512;
 
 export const WARN_MSG_MUTEDPLAY = "Please touch here to turn on the sound.";
 
@@ -244,6 +248,11 @@ export const SYSTEM_TEXT = [
                     "message": "Connection with low-latency(OME) server failed.",
                     "reason": "WebRTC setLocalDescription failed."
                 },
+                506: {
+                    "code": 506,
+                    "message": "Connection with low-latency(OME) server failed.",
+                    "reason": "WebRTC internal error."
+                },
                 510: {
                     "code": 510,
                     "message": "Network connection is unstable. Check the network connection.",
@@ -253,6 +262,11 @@ export const SYSTEM_TEXT = [
                     "code": 511,
                     "message": "Connection with low-latency(OME) terminated unexpectedly.",
                     "reason": "Unexpected end of connection."
+                },
+                512: {
+                    "code": 512,
+                    "message": "Connection with low-latency(OME) server failed.",
+                    "reason": "Connection timeout."
                 }
             }
         }
@@ -387,10 +401,178 @@ export const SYSTEM_TEXT = [
                     "message": "저지연(OME) 서버와 연결에 실패했습니다.",
                     "reason": "WebRTC setLocalDescription failed."
                 },
+                506: {
+                    "code": 506,
+                    "message": "저지연(OME) 서버와 연결에 실패했습니다.",
+                    "reason": "WebRTC internal error."
+                },
                 510: {
                     "code": 510,
                     "message": "네트워크 연결이 불안정합니다. 네트워크 연결을 확인하십시오.",
                     "reason": "Network is slow."
+                },
+                511: {
+                    "code": 511,
+                    "message": "저지연(OME) 서버와 연결에 실패했습니다.",
+                    "reason": "Unexpected end of connection."
+                },
+                512: {
+                    "code": 512,
+                    "message": "저지연(OME) 서버와 연결에 실패했습니다.",
+                    "reason": "Connection timeout."
+                }
+            }
+        }
+    },
+    {
+        "lang" : "pl",
+        "ui" : {
+            "context" : "O OvenPlayer",
+            "controls" : {
+                "live" : "Transmisja na żywo",
+                "low_latency_live" : "Transmisja z niskim opóźnieniem",
+                "low_latency_p2p" : "Transmisja z niskim opóźnieniem P2P",
+            },
+            "playlist" : "Playlista",
+            "setting" : {
+                "title" : "Ustawienia",
+                "speed" : "Prędkość",
+                "speedUnit" : "x",
+                "source" : "Źrodło",
+                "quality" : "Jakość",
+                "caption" : "Podtytuł",
+                "display" : "Wyświetlacz"
+            }
+        },
+        "api" : {
+            "message" : {
+                "muted_play" : "Naciśnij tutaj, aby aktywować dźwięk"
+            },
+            "error": {
+                100: {
+                    "code": 100,
+                    "message": "Nie można załadować z nieznanego powodu.",
+                    "reason": "Can not load due to unknown reasons."
+                },
+                101: {
+                    "code": 101,
+                    "message": "Nie można załadować, ponieważ nie znaleziono multimediów, który można odtworzyć.",
+                    "reason": "Can not load due to playable media not found."
+                },
+                102: {
+                    "code": 102,
+                    "message": "Flash fetching process aborted. </br><a href='http://www.adobe.com/go/getflashplayer' target='_self'><img src='http://www.adobe.com/images/shared/download_buttons/get_flash_player.gif' alt='Get Adobe Flash player'></a>",
+                    "reason": "It looks like not found swf or your environment is localhost."
+                },
+                103: {
+                    "code": 103,
+                    "message": "Nie można załadować, ponieważ wersja dash.js jest za stara.",
+                    "reason": "dash.js version is old. Please check the lastest."
+                },
+                104: {
+                    "code": 104,
+                    "message": "Can not load due to google ima for Ads. ",
+                    "reason": "Please check the google ima library."
+                },
+                105: {
+                    "code": 105,
+                    "message": "Nie można załadować, nie znaleziono dash.js.",
+                    "reason": "Not found dashjs."
+                },
+                106: {
+                    "code": 106,
+                    "message": "Nie można załadować, nie znaleziono hlsjs.",
+                    "reason": "Not found hlsjs."
+                },
+                300: {
+                    "code": 300,
+                    "message": "Nie można odtworzyć z nieznanego powodu.",
+                    "reason": "Can not play due to unknown reasons."
+                },
+                301: {
+                    "code": 301,
+                    "message": "Proces pobierania przerwany przez użytkownika.",
+                    "reason": "Fetching process aborted by user."
+                },
+                302: {
+                    "code": 302,
+                    "message": "Nie udało się pobrać niektórych multimediów z powodu błędu sieci.",
+                    "reason": "Error occurred when downloading."
+                },
+                303: {
+                    "code": 303,
+                    "message": "Nie udało się załadować niektórych multimediów. Może być to spowodowane problemem z serwerem, siecią lub niewspieranym formatem.",
+                    "reason": "Error occurred when decoding."
+                },
+                304: {
+                    "code": 304,
+                    "message": "Odtwarzanie zostało anulowane. Wygląda na to, że plik jest uszkodzony lub Twoja przeglądarka nie obsługuje tego pliku.",
+                    "reason": "Media playback not supported."
+                },
+                305: {
+                    "code": 305,
+                    "message": "Nie można wczytać napisów z nieznanego powodu.",
+                    "reason": "Can not load captions due to unknown reasons."
+                },
+                306: {
+                    "code": 306,
+                    "message": "Nie udało się załadować niektórych multimediów. Może być to spowodowane problemem z serwerem, siecią lub niewspieranym formatem.",
+                    "reason": "The server cannot or will not process the request."
+                },
+                307: {
+                    "code": 307,
+                    "message": "Nie udało się załadować niektórych multimediów. Może być to spowodowane problemem z serwerem, siecią lub niewspieranym formatem.",
+                    "reason": "The server refused the request."
+                },
+                308: {
+                    "code": 308,
+                    "message": "Nie udało się załadować niektórych multimediów. Może być to spowodowane problemem z serwerem, siecią lub niewspieranym formatem.",
+                    "reason": "The server do not accept the request."
+                },
+                501: {
+                    "code": 501,
+                    "message": "Połączenie z serwerem niskiego opóźnienia (OME) nie powiodło się.",
+                    "reason": "WebSocket connection failed."
+                },
+                502: {
+                    "code": 502,
+                    "message": "Połączenie z serwerem niskiego opóźnienia (OME) nie powiodło się.",
+                    "reason": "WebRTC addIceCandidate failed."
+                },
+                503: {
+                    "code": 503,
+                    "message": "Połączenie z serwerem niskiego opóźnienia (OME) nie powiodło się.",
+                    "reason": "WebRTC setRemoteDescription failed."
+                },
+                504: {
+                    "code": 504,
+                    "message": "Połączenie z serwerem niskiego opóźnienia (OME) nie powiodło się.",
+                    "reason": "WebRTC peer createOffer failed."
+                },
+                505: {
+                    "code": 505,
+                    "message": "Połączenie z serwerem niskiego opóźnienia (OME) nie powiodło się.",
+                    "reason": "WebRTC setLocalDescription failed."
+                },
+                506: {
+                    "code": 506,
+                    "message": "Połączenie z serwerem niskiego opóźnienia (OME) nie powiodło się.",
+                    "reason": "WebRTC internal error."
+                },
+                510: {
+                    "code": 510,
+                    "message": "Połączenie sieciowe jest niestabilne. Sprawdź swoją sieć.",
+                    "reason": "Network is slow."
+                },
+                511: {
+                    "code": 511,
+                    "message": "Połączenie z serwerem niskiego opóźnienia (OME) nieoczekiwanie zakończone.",
+                    "reason": "Unexpected end of connection."
+                },
+                512: {
+                    "code": 512,
+                    "message": "Połączenie z serwerem niskiego opóźnienia (OME) nie powiodło się.",
+                    "reason": "Connection timeout."
                 }
             }
         }

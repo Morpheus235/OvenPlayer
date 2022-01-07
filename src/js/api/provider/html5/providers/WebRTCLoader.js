@@ -9,19 +9,25 @@ import {
     PLAYER_WEBRTC_SET_LOCAL_DESC_ERROR,
     PLAYER_WEBRTC_NETWORK_SLOW,
     PLAYER_WEBRTC_UNEXPECTED_DISCONNECT,
+    PLAYER_WEBRTC_INTERNAL_ERROR,
     OME_P2P_MODE
 } from "api/constants";
 
 
-const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigger, playerConfig) {
+const WebRTCLoader = function (provider,
+                               webSocketUrl,
+                               loadCallback,
+                               connectedCallback,
+                               internalErrorCallback,
+                               errorTrigger,
+                               playerConfig) {
 
     let defaultConnectionConfig = {};
 
     let that = {};
 
     let ws = null;
-
-    let wsPing = null;
+    let wsConnected = false;
 
     let mainStream = null;
 
@@ -34,12 +40,12 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
     //closed websocket by ome or client.
     let wsClosedByPlayer = false;
 
-    let recorverPacketLoss = true;
+    let recorverPacketLoss = false;
 
     if (playerConfig.getConfig().webrtcConfig &&
-        playerConfig.getConfig().webrtcConfig.recorverPacketLoss === false) {
+        playerConfig.getConfig().webrtcConfig.recorverPacketLoss === true) {
 
-        recorverPacketLoss = playerConfig.getConfig().webrtcConfig.recorverPacketLoss;
+        recorverPacketLoss = true;
     }
 
     let generatePublicCandidate = true;
@@ -163,7 +169,7 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
     // return opus format number
     function getOpusFormatNumber(sdp) {
 
-        const lines = sdp.split('\n');
+        const lines = sdp.split('\r\n');
         let opusFormatNumber = -1;
 
         for (let i = 0; i < lines.length - 1; i++) {
@@ -182,7 +188,7 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
 
     function checkOpusIsStereo(sdp, opusFormatNumber) {
 
-        const lines = sdp.split('\n');
+        const lines = sdp.split('\r\n');
 
         let stereo = false;
 
@@ -205,7 +211,7 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
 
     function mungeSdpForceStereoOpus(sdp, opusFormatNumber) {
 
-        const lines = sdp.split('\n');
+        const lines = sdp.split('\r\n');
 
         // find this line and modify. "a=fmtp:102 minptime=10;useinbandfec=1"
         for (let i = 0; i < lines.length - 1; i++) {
@@ -221,10 +227,10 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
             }
         }
 
-        return lines.join('\n');
+        return lines.join('\r\n');
     }
 
-    function createMainPeerConnection(id, peerId, sdp, candidates, iceServers, resolve) {
+    function createMainPeerConnection(id, peerId, sdp, candidates, iceServers) {
 
         let peerConnectionConfig = {};
 
@@ -276,7 +282,7 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
                     }
                 }
 
-                regIceServer.username = iceServer.user_name;
+                regIceServer.username = iceServer.username || iceServer.user_name;
                 regIceServer.credential = iceServer.credential;
 
                 peerConnectionConfig.iceServers.push(regIceServer);
@@ -292,7 +298,18 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
 
         OvenPlayerConsole.log("Main Peer Connection Config : ", peerConnectionConfig);
 
-        let peerConnection = new RTCPeerConnection(peerConnectionConfig);
+        let peerConnection = null;
+
+        try {
+
+            peerConnection = new RTCPeerConnection(peerConnectionConfig);
+
+        } catch (error) {
+            let tempError = ERRORS.codes[PLAYER_WEBRTC_INTERNAL_ERROR];
+            tempError.error = error;
+            closePeer(tempError);
+            return;
+        }
 
         mainPeerConnectionInfo = {
             id: id,
@@ -301,56 +318,54 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
         };
 
         //Set remote description when I received sdp from server.
-        peerConnection.setRemoteDescription(new RTCSessionDescription(sdp))
-            .then(function () {
+        peerConnection.setRemoteDescription(new RTCSessionDescription(sdp)).then(function () {
 
-                peerConnection.createAnswer()
-                    .then(function (desc) {
+            peerConnection.createAnswer().then(function (desc) {
 
-                        const opusFormatNumber = getOpusFormatNumber(sdp.sdp);
+                const opusFormatNumber = getOpusFormatNumber(sdp.sdp);
 
-                        if (opusFormatNumber > -1) {
+                if (opusFormatNumber > -1) {
 
-                            if (checkOpusIsStereo(sdp.sdp, opusFormatNumber)) {
+                    if (checkOpusIsStereo(sdp.sdp, opusFormatNumber)) {
 
-                                //If offer has opus and if it is stereo, munge local sdp to force stereo=1
-                                //Thanks to community https://github.com/AirenSoft/OvenMediaEngine/issues/203
-                                desc.sdp = mungeSdpForceStereoOpus(desc.sdp, opusFormatNumber);
-                            }
-                        }
+                        //If offer has opus and if it is stereo, munge local sdp to force stereo=1
+                        //Thanks to community https://github.com/AirenSoft/OvenMediaEngine/issues/203
+                        desc.sdp = mungeSdpForceStereoOpus(desc.sdp, opusFormatNumber);
+                    }
+                }
 
-                        OvenPlayerConsole.log("create Host Answer : success");
+                OvenPlayerConsole.log('Local SDP', desc);
 
-                        peerConnection.setLocalDescription(desc).then(function () {
-                            // my SDP created.
-                            let localSDP = peerConnection.localDescription;
-                            OvenPlayerConsole.log('Local SDP', localSDP);
+                sendMessage(ws, {
+                    id: id,
+                    peer_id: peerId,
+                    command: 'answer',
+                    sdp: desc
+                });
 
-                            sendMessage(ws, {
-                                id: id,
-                                peer_id: peerId,
-                                command: 'answer',
-                                sdp: localSDP
-                            });
+                OvenPlayerConsole.log("create Host Answer : success");
 
-                        }).catch(function (error) {
+                peerConnection.setLocalDescription(desc).then(function () {
 
-                            let tempError = ERRORS.codes[PLAYER_WEBRTC_SET_LOCAL_DESC_ERROR];
-                            tempError.error = error;
-                            closePeer(tempError);
-                        });
-                    })
-                    .catch(function (error) {
-                        let tempError = ERRORS.codes[PLAYER_WEBRTC_CREATE_ANSWER_ERROR];
-                        tempError.error = error;
-                        closePeer(tempError);
-                    });
-            })
-            .catch(function (error) {
-                let tempError = ERRORS.codes[PLAYER_WEBRTC_SET_REMOTE_DESC_ERROR];
+
+                }).catch(function (error) {
+
+                    let tempError = ERRORS.codes[PLAYER_WEBRTC_SET_LOCAL_DESC_ERROR];
+                    tempError.error = error;
+                    closePeer(tempError);
+                });
+            }).catch(function (error) {
+
+                let tempError = ERRORS.codes[PLAYER_WEBRTC_CREATE_ANSWER_ERROR];
                 tempError.error = error;
                 closePeer(tempError);
             });
+        }).catch(function (error) {
+
+            let tempError = ERRORS.codes[PLAYER_WEBRTC_SET_REMOTE_DESC_ERROR];
+            tempError.error = error;
+            closePeer(tempError);
+        });
 
         if (candidates) {
 
@@ -358,12 +373,12 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
         }
 
         peerConnection.onicecandidate = function (e) {
+
             if (e.candidate) {
 
-                OvenPlayerConsole.log("WebRTCLoader send candidate to server : " , e.candidate);
+                OvenPlayerConsole.log("WebRTCLoader send candidate to server : ", e.candidate);
 
                 // console.log('Main Peer Connection candidate', e.candidate);
-
                 sendMessage(ws, {
                     id: id,
                     peer_id: peerId,
@@ -372,14 +387,38 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
                 });
             }
         };
+
         peerConnection.onconnectionstatechange = function (e) {
-            //iceConnectionState
+            //ConnectionState
             OvenPlayerConsole.log("[on connection state change]", peerConnection.connectionState, e);
 
+            // firefox and opera do not support onconnectionstatechange (Jan 07, 2021)
+            // double check with oniceconnectionstatechange
+            if (peerConnection.connectionState === 'connected') {
+
+                if (connectedCallback) {
+                    connectedCallback();
+                }
+            }
         };
+
+        peerConnection.onicecandidateerror = function (e) {
+
+        };
+
+        peerConnection.onicegatheringstatechange = function (e) {
+
+        };
+
         peerConnection.oniceconnectionstatechange = function (e) {
             OvenPlayerConsole.log("[on ice connection state change]", peerConnection.iceConnectionState, e);
 
+            if (peerConnection.iceConnectionState === 'connected') {
+
+                if (connectedCallback) {
+                    connectedCallback();
+                }
+            }
             /*
             * https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/iceConnectionState
             * Checks to ensure that components are still connected failed for at least one component of the RTCPeerConnection. This is a less stringent test than "failed" and may trigger intermittently and resolve just as spontaneously on less reliable networks, or during temporary disconnections. When the problem resolves, the connection may return to the "connected" state.
@@ -395,6 +434,7 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
                 }
             }
         };
+
         peerConnection.ontrack = function (e) {
 
             OvenPlayerConsole.log("stream received.");
@@ -418,7 +458,15 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
 
                     let receiver = receivers[i];
 
-                    receiver.playoutDelayHint = hint;
+                    if (receiver.track.kind === 'audio') {
+
+                        receiver.playoutDelayHint = hint;
+                        receiver.jitterBufferDelayHint = hint;
+                    } else {
+
+                        receiver.playoutDelayHint = hint;
+                    }
+
                     OvenPlayerConsole.log("WebRTC playoutDelayHint", receiver, hint);
                 }
 
@@ -599,7 +647,7 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
         }
     }
 
-    function initWebSocket(resolve, reject) {
+    function initWebSocket() {
 
         try {
 
@@ -607,15 +655,11 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
 
             ws.onopen = function () {
 
+                wsConnected = true;
+
                 sendMessage(ws, {
                     command: "request_offer"
                 });
-
-                // wsPing = setInterval(function () {
-                //
-                //     sendMessage(ws, {command: "ping"});
-                //
-                // }, 20 * 1000);
             };
 
             ws.onmessage = function (e) {
@@ -649,7 +693,9 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
 
                 if (message.command === 'offer') {
 
-                    createMainPeerConnection(message.id, message.peer_id, message.sdp, message.candidates, message.ice_servers, resolve);
+                    let iceServers = message.iceServers || message.ice_servers;
+
+                    createMainPeerConnection(message.id, message.peer_id, message.sdp, message.candidates, iceServers);
                     if (message.peer_id === 0) {
                         provider.trigger(OME_P2P_MODE, false);
                     } else {
@@ -724,9 +770,19 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
                     }
                 }
             };
-            ws.onclose = function () {
+            ws.onclose = function (e) {
 
                 if (!wsClosedByPlayer) {
+
+                    if (connectedCallback) {
+                        if (!wsConnected) {
+
+                            // If the websocket is closed while there is no connection,
+                            // it is judged as a timeout.
+                            closePeer();
+                            return;
+                        }
+                    }
 
                     let tempError = ERRORS.codes[PLAYER_WEBRTC_WS_ERROR];
 
@@ -740,13 +796,6 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
 
             ws.onerror = function (error) {
 
-                //Why Edge Browser calls onerror() when ws.close()?
-                if (!wsClosedByPlayer) {
-                    let tempError = ERRORS.codes[PLAYER_WEBRTC_WS_ERROR];
-                    tempError.error = error;
-                    closePeer(tempError);
-                    // reject(error);
-                }
             };
 
         } catch (error) {
@@ -758,13 +807,9 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
     function initialize() {
 
         OvenPlayerConsole.log("WebRTCLoader connecting...");
+        OvenPlayerConsole.log("WebRTCLoader url : " + webSocketUrl);
 
-        return new Promise(function (resolve, reject) {
-
-            OvenPlayerConsole.log("WebRTCLoader url : " + webSocketUrl);
-
-            initWebSocket(resolve, reject);
-        });
+        initWebSocket();
     }
 
     function closePeer(error) {
@@ -813,9 +858,6 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
             clientPeerConnections = {};
         }
 
-        clearInterval(wsPing);
-        wsPing = null;
-
         if (ws) {
             OvenPlayerConsole.log('Closing websocket connection...');
             OvenPlayerConsole.log("Send Signaling : Stop.");
@@ -825,7 +867,7 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
             2 (CLOSING)
             3 (CLOSED)
             */
-            if (ws.readyState === 0 || ws.readyState === 1) {
+            if (ws.readyState === 1) {
 
                 wsClosedByPlayer = true;
 
@@ -846,6 +888,11 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
         ws = null;
 
         if (error) {
+
+            if (internalErrorCallback) {
+                internalErrorCallback(error);
+            }
+
             errorTrigger(error, provider);
         }
     }
@@ -859,10 +906,13 @@ const WebRTCLoader = function (provider, webSocketUrl, loadCallback, errorTrigge
     }
 
     that.connect = () => {
-        return initialize();
+
+        initialize();
     };
 
     that.destroy = () => {
+
+        wsClosedByPlayer = true;
         closePeer();
     };
 

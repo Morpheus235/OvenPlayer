@@ -7,7 +7,9 @@ import {
     PROVIDER_HLS,
     PLAYER_STATE, STATE_IDLE, STATE_LOADING,
     INIT_DASH_UNSUPPORT, ERRORS,
-    INIT_HLSJS_NOTFOUND
+    INIT_HLSJS_NOTFOUND,
+    HLS_PREPARED,
+    HLS_DESTROYED
 } from "api/constants";
 import _ from "utils/underscore";
 import {
@@ -16,7 +18,7 @@ import {
     PLAYER_UNKNWON_DECODE_ERROR,
     PLAYER_BAD_REQUEST_ERROR,
     PLAYER_AUTH_FAILED_ERROR,
-    PLAYER_NOT_ACCEPTABLE_ERROR
+    PLAYER_NOT_ACCEPTABLE_ERROR, DASH_PREPARED, DASH_DESTROYED
 } from "../../../constants";
 
 /**
@@ -29,7 +31,6 @@ import {
 const HlsProvider = function (element, playerConfig, adTagUrl) {
     let that = {};
     let hls = null;
-    let superPlay_func = null;
     let superStop_func = null;
     let superDestroy_func = null;
     let loadRetryer = null;
@@ -42,10 +43,7 @@ const HlsProvider = function (element, playerConfig, adTagUrl) {
         let hlsConfig = {
             debug: false,
             maxBufferLength: 20,
-            maxMaxBufferLength: 30,
-            fragLoadingMaxRetry: 2,
-            manifestLoadingMaxRetry: 2,
-            levelLoadingMaxRetry: 2
+            maxMaxBufferLength: 30
         };
 
         let hlsConfigFromPlayerConfig = playerConfig.getConfig().hlsConfig;
@@ -86,7 +84,7 @@ const HlsProvider = function (element, playerConfig, adTagUrl) {
 
             OvenPlayerConsole.log("HLS : onExtendedLoad : ", source, "lastPlayPosition : " + lastPlayPosition);
 
-            let loadingRetryCount = playerConfig.getConfig().loadingRetryCount;
+            that.trigger(HLS_PREPARED, hls);
 
             hls.loadSource(source.file);
 
@@ -112,9 +110,6 @@ const HlsProvider = function (element, playerConfig, adTagUrl) {
                         that.seek(lastPlayPosition);
                     }
                 }
-                // if (playerConfig.isAutoStart()) {
-                //     that.play();
-                // }
             });
 
             hls.on(Hls.Events.ERROR, function (event, data) {
@@ -134,95 +129,32 @@ const HlsProvider = function (element, playerConfig, adTagUrl) {
 
                             that.stop();
                             hls.stopLoad();
-                            hls.startLoad();
-                            that.play();
+                            hls.loadSource(source.file);
                         }
 
                     }, 1000);
 
-                } else {
-
-                    hls.once(Hls.Events.FRAG_LOADING, function () {
-                        that.setState(STATE_LOADING);
-                    });
-
-                    if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-
-                        if (!data.fatal) {
-                            // do nothing when non fatal media error. hlsjs will recover it automatically.
-                            return;
-                        }
-                    }
-
-                    if (loadingRetryCount > 0) {
-
-                        that.setState(STATE_LOADING);
-
-                        if (loadRetryer) {
-                            clearTimeout(loadRetryer);
-                            loadRetryer = null;
-                        }
-
-                        loadingRetryCount = loadingRetryCount - 1;
-
-                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-
-                            loadRetryer = setTimeout(function () {
-
-                                that.stop();
-
-                                if (hls) {
-
-                                    hls.stopLoad();
-                                    hls.startLoad();
-                                }
-
-                                that.play();
-                            }, 1000);
-                        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-
-                            loadRetryer = setTimeout(function () {
-
-                                if (hls) {
-
-                                    hls.recoverMediaError();
-                                }
-
-                                that.play();
-                            }, 1000);
-                        } else {
-
-                            loadRetryer = setTimeout(function () {
-
-                                that.stop();
-
-                                if (hls) {
-
-                                    hls.stopLoad();
-                                    hls.startLoad();
-                                }
-
-                                that.play();
-                            }, 1000);
-                        }
-
-                    } else {
-
-                        let errorType = PLAYER_UNKNWON_NETWORK_ERROR;
-
-                        if (data && data.networkDetails && data.networkDetails.status === 400) {
-                            errorType = PLAYER_BAD_REQUEST_ERROR;
-                        } else if (data && data.networkDetails && data.networkDetails.status === 403) {
-                            errorType = PLAYER_AUTH_FAILED_ERROR;
-                        } else if (data && data.networkDetails && data.networkDetails.status === 406) {
-                            errorType = PLAYER_NOT_ACCEPTABLE_ERROR;
-                        }
-
-                        let tempError = ERRORS.codes[errorType];
-                        tempError.error = data.details;
-                        errorTrigger(tempError, that);
-                    }
+                    return;
                 }
+
+                if (!data.fatal) {
+                    // do nothing when non fatal error. hlsjs will recover it automatically.
+                    return;
+                }
+
+                let errorType = PLAYER_UNKNWON_NETWORK_ERROR;
+
+                if (data && data.networkDetails && data.networkDetails.status === 400) {
+                    errorType = PLAYER_BAD_REQUEST_ERROR;
+                } else if (data && data.networkDetails && data.networkDetails.status === 403) {
+                    errorType = PLAYER_AUTH_FAILED_ERROR;
+                } else if (data && data.networkDetails && data.networkDetails.status === 406) {
+                    errorType = PLAYER_NOT_ACCEPTABLE_ERROR;
+                }
+
+                let tempError = ERRORS.codes[errorType];
+                tempError.error = data.details;
+                errorTrigger(tempError, that);
             });
 
             that.on(PLAYER_STATE, function (data) {
@@ -242,26 +174,10 @@ const HlsProvider = function (element, playerConfig, adTagUrl) {
             });
         });
 
-        superPlay_func = that.super('play');
         superDestroy_func = that.super('destroy');
         OvenPlayerConsole.log("HLS PROVIDER LOADED.");
 
         superStop_func = that.super('stop');
-
-        that.play = () => {
-
-            if (!isManifestLoaded) {
-                let source = that.getSources()[that.getCurrentSource()].file;
-
-                if (hls) {
-                    hls.loadSource(source);
-                }
-
-            } else {
-                superPlay_func();
-            }
-
-        };
 
         that.stop = () => {
 
@@ -289,6 +205,8 @@ const HlsProvider = function (element, playerConfig, adTagUrl) {
             if (hls) {
 
                 hls.destroy();
+
+                that.trigger(HLS_DESTROYED);
             }
 
             hls = null;

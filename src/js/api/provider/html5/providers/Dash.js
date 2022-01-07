@@ -40,44 +40,29 @@ const Dash = function (element, playerConfig, adTagUrl) {
     let prevLLLiveDuration = null;
     let loadRetryer = null;
     let sourceOfFile = "";
-    let runedAutoStart = false;
 
     try {
 
-        if (dashjs.Version < "2.6.5") {
+        if (dashjs.Version < "3.0.0") {
             throw ERRORS.codes[INIT_DASH_UNSUPPORT];
         }
 
         const coveredSetAutoSwitchQualityFor = function (isAuto) {
 
-            if (dashjs.Version >= '3.0.0') {
-                dash.updateSettings({
-                    streaming: {
-                        abr: {
-                            autoSwitchBitrate: {
-                                video: isAuto
-                            }
+            dash.updateSettings({
+                streaming: {
+                    abr: {
+                        autoSwitchBitrate: {
+                            video: isAuto
                         }
                     }
-                });
-            } else if (dashjs.Version > "2.9.0") {
-                dash.setAutoSwitchQualityFor("video", isAuto);
-            } else {
-                dash.setAutoSwitchQualityFor(isAuto);
-            }
+                }
+            });
         };
 
         const coveredGetAutoSwitchQualityFor = function () {
-            let result = "";
 
-            if (dashjs.Version >= '3.0.0') {
-                result = dash.getSettings().streaming.abr.autoSwitchBitrate.video;
-            } else if (dashjs.Version > "2.9.0") {
-                result = dash.getAutoSwitchQualityFor("video");
-            } else {
-                result = dash.getAutoSwitchQualityFor();
-            }
-            return result;
+            return dash.getSettings().streaming.abr.autoSwitchBitrate.video;
         };
 
         const liveDelayReducingCallback = function () {
@@ -125,127 +110,71 @@ const Dash = function (element, playerConfig, adTagUrl) {
 
             OvenPlayerConsole.log("DASH : Attach File : ", source, "lastPlayPosition : " + lastPlayPosition);
 
-            that.trigger(DASH_PREPARED, dash);
-
             coveredSetAutoSwitchQualityFor(true);
             sourceOfFile = source.file;
 
-            dash.off(dashjs.MediaPlayer.events.PLAYBACK_PLAYING, liveDelayReducingCallback);
+            // dash.off(dashjs.MediaPlayer.events.PLAYBACK_PLAYING, liveDelayReducingCallback);
 
             if (source.lowLatency === true) {
 
                 prevLLLiveDuration = null;
 
-                if (dashjs.Version >= '3.0.0') {
-
-                    dash.updateSettings({
-                        streaming: {
-                            lowLatencyEnabled: source.lowLatency
-                        }
-                    });
-
-                } else {
-
-                    dash.setLowLatencyEnabled(source.lowLatency);
-                }
-
-                if (playerConfig.getConfig().lowLatencyMpdLiveDelay && typeof(playerConfig.getConfig().lowLatencyMpdLiveDelay) === 'number') {
-
-                    if (dashjs.Version >= '3.0.0') {
-
-                        dash.updateSettings({
-                            streaming: {
-                                liveDelay: playerConfig.getConfig().lowLatencyMpdLiveDelay
-                            }
-                        });
-                    } else {
-                        dash.setLiveDelay(playerConfig.getConfig().lowLatencyMpdLiveDelay);
-                    }
-                }
-
-                dash.on(dashjs.MediaPlayer.events.PLAYBACK_PLAYING, liveDelayReducingCallback);
-
-            } else {
-
-                if (dashjs.Version >= '3.0.0') {
-
-                    dash.updateSettings({
-                        streaming: {
-                            lowLatencyEnabled: false,
-                            liveDelay: undefined
-                        }
-                    });
-
-                } else {
-
-                    dash.setLowLatencyEnabled(false);
-                    dash.setLiveDelay();
-                }
-
-            }
-
-            if (dashjs.Version >= '3.0.0') {
-
                 dash.updateSettings({
-                    debug: {
-                        logLevel: dashjs.Debug.LOG_LEVEL_NONE
-                    },
                     streaming: {
-                        retryAttempts: {
-                            MPD: 0
-                        }
+                        lowLatencyEnabled: source.lowLatency
                     }
                 });
 
+                if (playerConfig.getConfig().lowLatencyMpdLiveDelay && typeof(playerConfig.getConfig().lowLatencyMpdLiveDelay) === 'number') {
+
+                    dash.updateSettings({
+                        streaming: {
+                            liveDelay: playerConfig.getConfig().lowLatencyMpdLiveDelay
+                        }
+                    });
+                }
+
+                // dash.on(dashjs.MediaPlayer.events.PLAYBACK_PLAYING, liveDelayReducingCallback);
+
             } else {
 
-                dash.getDebug().setLogToBrowserConsole(false);
+                dash.updateSettings({
+                    streaming: {
+                        lowLatencyEnabled: false,
+                        liveDelay: undefined
+                    }
+                });
+
             }
+
+            dash.updateSettings({
+                debug: {
+                    logLevel: dashjs.Debug.LOG_LEVEL_NONE
+                }
+            });
+
+            let dashConfigFromPlayerConfig = playerConfig.getConfig().dashConfig;
+
+            if (dashConfigFromPlayerConfig) {
+                dash.updateSettings(dashConfigFromPlayerConfig);
+            }
+
+            that.trigger(DASH_PREPARED, dash);
 
             dash.attachSource(sourceOfFile);
 
             seekPosition_sec = lastPlayPosition;
-
         });
 
         superPlay_func = that.super('play');
         superDestroy_func = that.super('destroy');
         OvenPlayerConsole.log("DASH PROVIDER LOADED.");
 
-        let loadingRetryCount = playerConfig.getConfig().loadingRetryCount;
-
         dash.on(dashjs.MediaPlayer.events.ERROR, function (error) {
 
-            // Handle mpd load error.
-            if (error &&
-                (
-                    error.error.code === dashjs.MediaPlayer.errors.DOWNLOAD_ERROR_ID_MANIFEST_CODE ||
-                    error.error.code === dashjs.MediaPlayer.errors.MANIFEST_LOADER_LOADING_FAILURE_ERROR_CODE
-                )) {
-
-                if (loadingRetryCount > 0) {
-
-                    that.setState(STATE_LOADING);
-
-                    if (loadRetryer) {
-                        clearTimeout(loadRetryer);
-                        loadRetryer = null;
-                    }
-
-                    loadingRetryCount = loadingRetryCount - 1;
-
-                    loadRetryer = setTimeout(function () {
-
-
-                        dash.attachSource(sourceOfFile);
-                    }, 1000);
-                } else {
-
-                    let tempError = ERRORS.codes[PLAYER_UNKNWON_NETWORK_ERROR];
-                    tempError.error = error;
-                    errorTrigger(tempError, that);
-                }
-            }
+            let tempError = ERRORS.codes[PLAYER_UNKNWON_NETWORK_ERROR];
+            tempError.error = error;
+            errorTrigger(tempError, that);
         });
 
         dash.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_REQUESTED, function (event) {
@@ -292,12 +221,6 @@ const Dash = function (element, playerConfig, adTagUrl) {
 
             if (seekPosition_sec && !spec.isLive) {
                 dash.seek(seekPosition_sec);
-            }
-
-            if (playerConfig.isAutoStart() && !runedAutoStart) {
-                OvenPlayerConsole.log("DASH : AUTOPLAY()!");
-                that.play();
-                runedAutoStart = true;
             }
 
         });

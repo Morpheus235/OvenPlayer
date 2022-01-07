@@ -135,6 +135,7 @@ const View = function($container){
         $playerRoot = $current;
         viewTemplate = template;
         calcPlayerWidth();
+        currentPlayerSize = screenSize;
         new ResizeSensor($playerRoot.get(), function() {
 
             $playerRoot.removeClass("large");
@@ -312,9 +313,14 @@ const View = function($container){
 
         api.on(READY, function(data) {
 
-            if(!controls && showControlBar){
+            if(!controls){
                 controls = Controls($playerRoot.find(".op-ui"), playerInstance);
             }
+
+            if (!showControlBar) {
+                $playerRoot.addClass("op-no-controls");
+            }
+
         });
 
         api.on(ERROR, function(error) {
@@ -352,16 +358,7 @@ const View = function($container){
         let showControlBar = api.getConfig() && api.getConfig().controls;
 
         helper = Helpers($playerRoot.find(".op-ui"), playerInstance);
-        if(showControlBar){
-            controls = Controls($playerRoot.find(".op-ui"), playerInstance);
-        } else {
-
-            // to use full screen api
-            if (api.getConfig() && api.getConfig().expandFullScreenUI) {
-                controls = Controls($playerRoot.find(".op-ui"), playerInstance);
-                controls.destroy();
-            }
-        }
+        controls = Controls($playerRoot.find(".op-ui"), playerInstance);
 
         let aspectRatio = api.getConfig().aspectRatio;
 
@@ -377,6 +374,15 @@ const View = function($container){
                 $playerRoot.find('.op-ratio').css('padding-bottom', ratio + '%');
             }
         }
+
+        api.showControls = function (show) {
+            if (show) {
+                $playerRoot.removeClass("op-no-controls");
+                setHide(false, true);
+            } else {
+                $playerRoot.addClass("op-no-controls");
+            }
+        };
     };
 
 

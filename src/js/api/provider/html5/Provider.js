@@ -15,6 +15,7 @@ import {
     AD_CLIENT_GOOGLEIMA, AD_CLIENT_VAST,
     PLAYBACK_RATE_CHANGED, CONTENT_MUTE, PROVIDER_HTML5, PROVIDER_WEBRTC, PROVIDER_DASH, PROVIDER_HLS
 } from "api/constants";
+import {CONTENT_META} from "../../constants";
 
 /**
  * @brief   Core For Html5 Video.
@@ -75,6 +76,7 @@ const Provider = function (spec, playerConfig, onExtendedLoad){
             // sourceElement.src = source.file;
 
             const sourceChanged = (source.file !== previousSource);
+
             if (sourceChanged) {
 
                 elVideo.src = source.file;
@@ -88,28 +90,13 @@ const Provider = function (spec, playerConfig, onExtendedLoad){
                     elVideo.load();
                 }
 
+            }
 
-                if(lastPlayPosition && lastPlayPosition > 0){
+            that.on(CONTENT_META, function () {
+                if (lastPlayPosition > 0) {
                     that.seek(lastPlayPosition);
                 }
-
-            }
-
-            if(lastPlayPosition > 0){
-                that.seek(lastPlayPosition);
-                if(!playerConfig.isAutoStart()){
-                    // that.play();
-                }
-
-            }
-
-            if(playerConfig.isAutoStart()){
-
-                // that.play();
-            }
-            /*that.trigger(CONTENT_SOURCE_CHANGED, {
-                currentSource: spec.currentSource
-            });*/
+            });
         }
 
     };
@@ -119,6 +106,9 @@ const Provider = function (spec, playerConfig, onExtendedLoad){
     };
     that.getMse = () => {
         return spec.mse;
+    };
+    that.getMediaElement = () => {
+        return spec.element;
     };
     that.canSeek = () => {
         return spec.canSeek;
@@ -166,7 +156,6 @@ const Provider = function (spec, playerConfig, onExtendedLoad){
             //}
 
             OvenPlayerConsole.log("Provider : triggerSatatus", newState);
-
             switch (newState) {
                 case STATE_COMPLETE :
                     that.trigger(PLAYER_COMPLETE);
@@ -188,6 +177,7 @@ const Provider = function (spec, playerConfig, onExtendedLoad){
                         prevState: spec.state,
                         newstate: STATE_PLAYING
                     });
+                    break;
                 case STATE_AD_PLAYING :
                     that.trigger(PLAYER_PLAY, {
                         prevState: spec.state,
@@ -231,12 +221,11 @@ const Provider = function (spec, playerConfig, onExtendedLoad){
             return false;
         }
         elVideo.volume = volume/100;
+        playerConfig.setVolume(volume);
     };
     that.getVolume = () =>{
-        if(!elVideo){
-            return 0;
-        }
-        return elVideo.volume*100;
+
+        return playerConfig.getVolume();
     };
     that.setMute = (state) =>{
         if(!elVideo){
@@ -244,27 +233,29 @@ const Provider = function (spec, playerConfig, onExtendedLoad){
         }
         if (typeof state === 'undefined') {
 
-            elVideo.muted = !elVideo.muted;
+            const muted = playerConfig.isMute();
+
+            elVideo.muted = !muted;
+            playerConfig.setMute(!muted);
 
             that.trigger(CONTENT_MUTE, {
-                mute: elVideo.muted
+                mute: playerConfig.isMute()
             });
 
         } else {
 
             elVideo.muted = state;
+            playerConfig.setMute(state);
 
             that.trigger(CONTENT_MUTE, {
-                mute: elVideo.muted
+                mute: playerConfig.isMute()
             });
         }
         return elVideo.muted;
     };
     that.getMute = () =>{
-        if(!elVideo){
-            return false;
-        }
-        return elVideo.muted;
+
+        return playerConfig.isMute();
     };
 
     that.preload = (sources, lastPlayPosition) =>{
@@ -353,9 +344,7 @@ const Provider = function (spec, playerConfig, onExtendedLoad){
                     OvenPlayerConsole.log("Provider : video play success (ie)");
                     isPlayingProcessing = false;
                 }
-
             }
-
         }
 
     };

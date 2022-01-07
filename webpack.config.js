@@ -1,15 +1,11 @@
 const webpack = require('webpack');
-const {merge} = require('webpack-merge');
 const path = require('path');
-const {BundleAnalyzerPlugin} = require('webpack-bundle-analyzer');
 const packageInfo = require('./package.json');
 
 const config = {
-
     mode: 'production',
     entry: {
         'ovenplayer': ['core-js/stable', 'whatwg-fetch', './src/js/ovenplayer.js']
-
     },
     target: ['web', 'es5'],
     resolve: {
@@ -44,7 +40,7 @@ const config = {
                                     {
                                         'useBuiltIns': 'entry',
                                         'corejs': 3,
-                                        'targets': {'ie': '11'}
+                                        'targets': { 'ie': '11' }
                                     }
                                 ]
                             ]
@@ -81,15 +77,8 @@ const config = {
     plugins: [
         new webpack.DefinePlugin({
             __VERSION__: `'${packageInfo.version}'`
-        }),
-        new BundleAnalyzerPlugin({
-            analyzerMode: 'static',
-            defaultSizes: 'stat'
         })
     ]
 };
 
-module.exports = (env, args) => {
-
-    return config;
-};
+module.exports = config;

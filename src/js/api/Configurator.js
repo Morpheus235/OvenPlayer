@@ -33,7 +33,7 @@ const Configurator = function(options, provider){
             systemText : null,
             lang : "en",
             loadingRetryCount: 0,
-            expandFullScreenUI: false,
+            expandFullScreenUI: true,
             fullscreenOption: null,
             showBigPlayButton: true
         };
@@ -203,7 +203,9 @@ const Configurator = function(options, provider){
     that.getRtmpBufferTimeMax = () => {
         return spec.rtmpBufferTimeMax;
     };
-
+    that.setMute = (mute) =>{
+        spec.mute = mute;
+    };
     that.isMute = () =>{
         return spec.mute;
     };

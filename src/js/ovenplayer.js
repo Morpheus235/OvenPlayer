@@ -1,5 +1,6 @@
+import {version} from 'version'
 import OvenPlayerSDK from './ovenplayer.sdk'
-import {checkAndGetContainerElement} from 'utils/validator';
+import {checkAndGetContainerElement} from 'utils/validator'
 import View from './view/view';
 
 function ovenPlayerFactory() {
@@ -10,14 +11,18 @@ function ovenPlayerFactory() {
 
     OvenPlayer.create = function (container, options) {
 
+        console.log("[OvenPlayer] v."+ version);
+
         let containerElement = checkAndGetContainerElement(container);
 
         let player = View(containerElement);
 
         const playerInstance = OvenPlayerSDK.create(player.getMediaElementContainer(), options);
 
-
         Object.assign(playerInstance, {
+            getContainerElement: function () {
+                return containerElement;
+            },
             getContainerId: function () {
                 return containerElement.id;
             }
